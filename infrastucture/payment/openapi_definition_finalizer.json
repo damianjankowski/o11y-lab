@@ -1,0 +1,83 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Payment API",
+    "description": "API Gateway setup for integrating with AWS Lambda functions for initiating and finalizing payments.",
+    "version": "1.0"
+  },
+  "paths": {
+    "/": {
+      "options": {
+        "summary": "CORS support for finalize payment",
+        "description": "Handles preflight requests for CORS on finalize payment endpoint.",
+        "responses": {
+          "200": {
+            "description": "CORS support response",
+            "headers": {
+              "Access-Control-Allow-Origin": {
+                "description": "Specifies the allowed origin for CORS.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Methods": {
+                "description": "Specifies the allowed HTTP methods.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Access-Control-Allow-Headers": {
+                "description": "Specifies the allowed HTTP headers.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "type": "mock",
+          "requestTemplates": {
+            "application/json": "{\"statusCode\": 200}"
+          },
+          "responses": {
+            "default": {
+              "statusCode": "200",
+              "responseParameters": {
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Finalize a payment",
+        "description": "Handles a POST request to finalize a payment and invokes Lambda 2.",
+        "responses": {
+          "200": {
+            "description": "Successful finalization of payment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "example": {
+                    "message": "Payment finalized successfully",
+                    "statusCode": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-amazon-apigateway-integration": {
+          "type": "aws_proxy",
+          "httpMethod": "POST",
+          "payloadFormatVersion": "2.0",
+          "uri": "arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/${lambda_arn}/invocations"
+        }
+      }
+    }
+  }
+}
