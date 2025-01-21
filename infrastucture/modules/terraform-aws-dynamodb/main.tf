@@ -22,7 +22,7 @@ resource "aws_dynamodb_table" "this" {
       enabled        = true
     }
   }
-  
+
   dynamic "global_secondary_index" {
     for_each = var.global_secondary_indexes
     content {
