@@ -1,5 +1,11 @@
 .SHELLFLAGS = -e
 
+ifneq (,$(wildcard .env))
+    include .env
+    export $(shell sed 's/=.*//' .env)
+endif
+
+
 # Variables
 TERRAFORM_DIR := infrastucture/payment
 ENVIRONMENTS_MAIN := infrastucture/environments-main
@@ -106,3 +112,24 @@ deploy-pay-init:  ## Deploy Payment app - init
 .PHONY: deploy-pay-fin
 deploy-pay-fin:  ## Deploy Payment app - fin
 	cd src/lambda-payments-finalizer/ && make deploy-s3-using-docker
+
+
+# Apps
+##@ Apps
+
+
+
+# TODO
+## Nuke them All
+###@ NUke them all
+#.PHONY: install-nuke
+#install-nuke:  ## Install aws nuke https://github.com/ekristen/aws-nuke/
+#	brew install ekristen/tap/aws-nuke
+#
+#.PHONY: nuke-dry-run
+#nuke-dry-run:  ## Nuke - dry run
+#	aws-nuke nuke --config nuke-config.yml --force --profile priv-user-0x44616D69616E-damian
+#
+#.PHONY: nuke-them-all
+#nuke-them-all:  ## Nuke
+#	aws-nuke run --config nuke-config.yml --force --profile priv-user-0x44616D69616E-damian

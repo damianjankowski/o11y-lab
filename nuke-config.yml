@@ -1,0 +1,24 @@
+blocklist:
+  - 1234567890
+
+blocklist-terms:
+  - "prod"
+  - "production"
+  - "live"
+
+no-blocklist-terms-default: true
+
+accounts:
+  ${ACCOUNT_ID}:
+    account-alias: "damiansandbox"
+    filters:
+      S3Bucket:
+        - "o11y-lab-terraform-state"
+      KMSAlias:
+        - "alias/tf/secrets"
+
+regions:
+  - "eu-west-1"
+  - "us-east-1"
+  - "ap-southeast-1"
+  - "global"

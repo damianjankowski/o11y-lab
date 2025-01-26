@@ -1,155 +1,82 @@
-data "aws_caller_identity" "current" {}
+module activegate_ec2 {
+  source = "../modules/terraform-aws-ec2"
 
-locals {
-  principals_identifiers = var.active_gate_account_id == null || var.active_gate_role_name == null ? [
-    "509560245411" # Dynatrace monitoring account ID
-    ] : [
-    "509560245411", # Dynatrace monitoring account ID
-    "arn:aws:iam::${var.active_gate_account_id}:role/${var.active_gate_role_name}"
-  ]
+  vpc_name = "o11y-lab-vpc"
+  public_subnet_name = "o11y-lab-public-subnet"
+  igw_name = "o11y-lab-igw"
+  route_table_name = "o11y-lab-public-route-table"
+  security_group_name = "o11y-lab-sg"
+  instance_name = "DynatraceActiveGate"
+  role_name = module.activegate_monitoring_role.active_gate_role_name
 }
 
-data "aws_iam_policy_document" "dynatrace_aws_integration_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
+module activegate_monitoring_role {
+  source = "../modules/terraform-aws-dynatrace-activegate-monitoring-role"
 
-    principals {
-      type        = "AWS"
-      identifiers = local.principals_identifiers
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "sts:ExternalId"
-      values = [
-        var.dynatrace_aws_integration_external_id,
-      ]
-    }
+  active_gate_role_name = "dynatrace_ag_role_name"
+  assume_policy_name    = "dynatrace_assume_policy"
+  monitoring_role_name  = "dynatrace_monitoring_role"
+  monitored_account_id  = var.monitored_account_id
+}
+
+module terraform-aws-dynatrace-monitoring-role {
+  source = "../modules/terraform-aws-dynatrace-monitoring-role"
+  external_id           = var.external_id
+  active_gate_role_name = module.activegate_monitoring_role.active_gate_role_name
+  active_gate_account_id = var.monitored_account_id
+}
+
+output "monitoring_role" {
+  value = module.activegate_monitoring_role.monitoring_role_name
+}
+
+output "private_key_pem" {
+  value     = module.activegate_ec2.private_key_pem
+  sensitive = true
+}
+
+output "instance_public_ip" {
+  value       = module.activegate_ec2.instance_public_ip
+  description = "Public IP address of the EC2 instance"
+}
+
+variable "DYNATRACE_ACTIVEGATE_TOKEN" {
+  description = "API token for Dynatrace ActiveGate installation"
+  type        = string
+  # sensitive   = true
+}
+
+variable "DYNATRACE_ENV_URL" {
+  description = ""
+  type        = string
+  # sensitive   = true
+}
+
+resource "null_resource" "install_activegate" {
+  triggers = {
+    instance_id = module.activegate_ec2.instance_id
   }
-}
 
-# REQUIRED MINIMUM:
-# "cloudwatch:GetMetricData"
-# "cloudwatch:GetMetricStatistics"
-# "cloudwatch:ListMetrics"
-# "sts:GetCallerIdentity"
-# "tag:GetResources"
-# "tag:GetTagKeys"
-# "ec2:DescribeAvailabilityZones"
+  provisioner "remote-exec" {
+    connection {
+      type        = "ssh"
+      host        = module.activegate_ec2.instance_public_ip
+      user        = "ec2-user"
+      private_key = module.activegate_ec2.private_key_pem
+    }
 
-data "aws_iam_policy_document" "dynatrace_aws_integration" {
-  statement {
-    actions = [
-      "acm-pca:ListCertificateAuthorities",
-      "apigateway:GET",
-      "appstream:DescribeFleets",
-      "appsync:ListGraphqlApis",
-      "athena:ListWorkGroups",
-      "autoscaling:DescribeAutoScalingGroups",
-      "autoscaling:DescribeLaunchConfigurations",
-      "cloudformation:DescribeStacks",
-      "cloudformation:ListStackResources",
-      "cloudfront:ListDistributions",
-      "cloudhsm:DescribeClusters",
-      "cloudsearch:DescribeDomains",
-      "cloudtrail:LookupEvents",
-      "cloudwatch:GetMetricData",
-      "cloudwatch:GetMetricStatistics",
-      "cloudwatch:ListMetrics",
-      "codebuild:ListProjects",
-      "codepipeline:ListPipelines",
-      "datasync:ListTasks",
-      "dax:DescribeClusters",
-      "directconnect:DescribeConnections",
-      "dms:DescribeReplicationInstances",
-      "dynamodb:DescribeTable",
-      "dynamodb:ListTables",
-      "dynamodb:ListTagsOfResource",
-      "ec2:DescribeAvailabilityZones",
-      "ec2:DescribeInstances",
-      "ec2:DescribeNatGateways",
-      "ec2:DescribeSpotFleetRequests",
-      "ec2:DescribeTransitGateways",
-      "ec2:DescribeVolumes",
-      "ec2:DescribeVpcEndpoints",
-      "ec2:DescribeVpnConnections",
-      "ecs:DescribeClusters",
-      "ecs:ListClusters",
-      "eks:DescribeCluster",
-      "eks:ListClusters",
-      "elasticache:DescribeCacheClusters",
-      "elasticbeanstalk:DescribeEnvironmentResources",
-      "elasticbeanstalk:DescribeEnvironments",
-      "elasticfilesystem:DescribeFileSystems",
-      "elasticloadbalancing:DescribeInstanceHealth",
-      "elasticloadbalancing:DescribeListeners",
-      "elasticloadbalancing:DescribeLoadBalancers",
-      "elasticloadbalancing:DescribeRules",
-      "elasticloadbalancing:DescribeTags",
-      "elasticloadbalancing:DescribeTargetHealth",
-      "elasticmapreduce:ListClusters",
-      "elastictranscoder:ListPipelines",
-      "es:ListDomainNames",
-      "events:ListEventBuses",
-      "firehose:ListDeliveryStreams",
-      "fsx:DescribeFileSystems",
-      "gamelift:ListFleets",
-      "glue:GetJobs",
-      "inspector:ListAssessmentTemplates",
-      "kafka:ListClusters",
-      "kinesis:ListStreams",
-      "kinesisanalytics:ListApplications",
-      "kinesisvideo:ListStreams",
-      "lambda:ListFunctions",
-      "lambda:ListTags",
-      "lex:GetBots",
-      "logs:DescribeLogGroups",
-      "mediaconnect:ListFlows",
-      "mediaconvert:DescribeEndpoints",
-      "mediapackage-vod:ListPackagingConfigurations",
-      "mediapackage:ListChannels",
-      "mediatailor:ListPlaybackConfigurations",
-      "opsworks:DescribeStacks",
-      "qldb:ListLedgers",
-      "rds:DescribeDBClusters",
-      "rds:DescribeDBInstances",
-      "rds:DescribeEvents",
-      "rds:ListTagsForResource",
-      "redshift:DescribeClusters",
-      "robomaker:ListSimulationJobs",
-      "route53:ListHostedZones",
-      "route53resolver:ListResolverEndpoints",
-      "s3:ListAllMyBuckets",
-      "sagemaker:ListEndpoints",
-      "sns:ListTopics",
-      "sqs:ListQueues",
-      "storagegateway:ListGateways",
-      "sts:GetCallerIdentity",
-      "swf:ListDomains",
-      "tag:GetResources",
-      "tag:GetTagKeys",
-      "transfer:ListServers",
-      "workmail:ListOrganizations",
-      "workspaces:DescribeWorkspaces",
-      "xray:GetTraceSummaries",
-      "xray:GetServiceGraph"
+    inline = [
+      "sudo dnf install libxcrypt-compat -y",
+      "wget -O Dynatrace-ActiveGate-Linux-x86-1.305.57.sh \"${var.DYNATRACE_ENV_URL}\" --header=\"Authorization: Api-Token ${var.DYNATRACE_ACTIVEGATE_TOKEN}\"",
+      "wget https://ca.dynatrace.com/dt-root.cert.pem",
+      "( echo 'Content-Type: multipart/signed; protocol=\"application/x-pkcs7-signature\"; micalg=\"sha-256\"; boundary=\"--SIGNED-INSTALLER\"'; echo ; echo ; echo '----SIGNED-INSTALLER' ; cat Dynatrace-ActiveGate-Linux-x86-1.305.57.sh ) | openssl cms -verify -CAfile dt-root.cert.pem > /dev/null",
+      "sudo /bin/bash Dynatrace-ActiveGate-Linux-x86-1.305.57.sh",
     ]
-
-    resources = ["*"]
   }
+
+  depends_on = [module.activegate_ec2]
 }
 
-resource "aws_iam_policy" "dynatrace_aws_integration" {
-  name   = var.dynatrace_aws_integration_policy_name
-  policy = data.aws_iam_policy_document.dynatrace_aws_integration.json
-}
-
-resource "aws_iam_role" "dynatrace_aws_integration" {
-  name               = var.dynatrace_aws_integration_role_name
-  description        = var.dynatrace_aws_integration_role_description
-  assume_role_policy = data.aws_iam_policy_document.dynatrace_aws_integration_assume_role.json
-}
-
-resource "aws_iam_role_policy_attachment" "dynatrace_aws_integration" {
-  role       = aws_iam_role.dynatrace_aws_integration.name
-  policy_arn = aws_iam_policy.dynatrace_aws_integration.arn
-}
+########################################################################################
+# PAMIĘTA O DODANIU ROLI DO EC2
+########################################################################################
