@@ -1,3 +1,12 @@
+module activegate_monitoring_role {
+  source = "../modules/terraform-aws-dynatrace-activegate-monitoring-role"
+
+  active_gate_role_name = "dynatrace_ag_role_name"
+  assume_policy_name    = "dynatrace_assume_policy"
+  monitoring_role_name  = "dynatrace_monitoring_role"
+  monitored_account_id  = var.monitored_account_id
+}
+
 module activegate_ec2 {
   source = "../modules/terraform-aws-ec2"
 
@@ -8,15 +17,8 @@ module activegate_ec2 {
   security_group_name = "o11y-lab-sg"
   instance_name = "DynatraceActiveGate"
   role_name = module.activegate_monitoring_role.active_gate_role_name
-}
 
-module activegate_monitoring_role {
-  source = "../modules/terraform-aws-dynatrace-activegate-monitoring-role"
-
-  active_gate_role_name = "dynatrace_ag_role_name"
-  assume_policy_name    = "dynatrace_assume_policy"
-  monitoring_role_name  = "dynatrace_monitoring_role"
-  monitored_account_id  = var.monitored_account_id
+  depends_on = [module.activegate_monitoring_role]
 }
 
 module terraform-aws-dynatrace-monitoring-role {

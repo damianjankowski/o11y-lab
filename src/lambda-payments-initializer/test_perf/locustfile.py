@@ -3,6 +3,7 @@ import logging
 import os
 from uuid import uuid4
 from random import randint
+import time
 
 import dotenv
 from locust import HttpUser, between, task
@@ -34,7 +35,7 @@ class SimulatedUser(HttpUser):
         headers = {
             "Content-Type": "application/json",
         }
-
+        time.sleep(5 * 60)
         self._send_request("POST", "/", json=payment, headers=headers)
 
     def _send_request(self, method, path, **kwargs):

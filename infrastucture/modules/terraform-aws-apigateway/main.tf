@@ -70,6 +70,6 @@ resource "aws_api_gateway_method_settings" "all" {
 }
 
 resource "aws_cloudwatch_log_group" "this" {
-  name              = "/aws/kinesisfirehose/${aws_api_gateway_rest_api.this.name}-api-gateway-execution-logs_${aws_api_gateway_rest_api.this.id}/${var.api_gateway_stage_name}"
+  name              = "/aws/apigateway/${aws_api_gateway_rest_api.this.name}-execution-logs_${aws_api_gateway_rest_api.this.id}/${var.api_gateway_stage_name}"
   retention_in_days = var.log_retention
 }

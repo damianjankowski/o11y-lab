@@ -42,3 +42,9 @@ variable "lambda_layers_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "log_retention" {
+  description = "Log retention days"
+    type = number
+  default = 3
+}

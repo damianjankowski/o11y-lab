@@ -2,143 +2,290 @@
 
 
 # Intro
-Nowadays, the rapidly developing technology lean towards architects and developers to adopt cloud native principles. By abstracting infrastructure management, increasing adoption of event-driven design and scalability the serverless is natural step ahead in cloud-native philosophy, especially where those matters. This approach offers a lot of benefits but "with great power comes great responsibility...". Without proper desing and observability profits may become challenges, leading to raise of costs, degrageted performance, security vulnerabilities and difficulties in debugging. 
 
-Serverless Unified Observability Done Right
-is a article which I hope will bring you closed to really comprehensive topic which is `OBSERVABILITY`.
-In this material you will learn how to setup "observability lab" which contains technologies like:
-- AWS Lambda
-- API Gateway
-- DynamoDB
-- OpenTelemetry
-- Dynatrace
+Observability is a foundational practise that helps answer critical questions about your system's health and performance.
+- **Is it available?**
+- **Is it responding correctly?**
+- **Is it performing fast enough?**
+- **Is it cost efficient?**
+In a cloud-native world, where serverless architecture are gaining popularity, these questions become even more crucial. Without proper design and observability, the advantages of serverless can quickly become pitfalls, resulting in increased costs, degraded performance, security vulnerabilities, and complex debugging scenarios.
 
+Like many others, I typically rely on cloud-native reference architectures for building my serverless applications. However, when it comes to observability, I’ve felt that there is not good enough documentation or best practices for instrumenting serverless with OpenTelemetry and connecting those traces to metrics and logs that can be pulled or streamed from the cloud vendor.
+
+In this article, I’ll share my **Unified Observability for AWS Serverless Stack GitLab Tutorial**, which showcasesall the lessons learned, from setting up the stack (**API Gateway, Lambda, Firehose, etc.**) using **Terraform**, to instrumenting the code with **OpenTelemetry**, and finally to consolidating all observability signals into a single **Dynatrace** platform. 
+
+<img src="img/main.png" alt="">
 
 # Observability lab - components
+## Architecture
 
-## AWS Lambda
-serverless compute service that runs your code dynamically on demand, eliminating the need for provisioning or managing infastucture. It execute your application in response to event such as HTTP requests, changes data in S3 bucket, DynamoDB tables or scheduled tasks. Key metrics, such as failure rate, execution duration, concurrent executions count and number of invocations provide a comprehensive view of backend performance.
+In the article, I propose high-level design:
 
-## AWS APIGateway 
-APIs are the backbone of modern system. APIGateway manage all HTTP/HTTPS calls to our applications. It works seamlessly with Lambda to create scalable, event-driven architectures for modern applications .It is also a perfect entry point to start debugging problem with application. 4xx errors helps to identify a problems with bad requests e.g. authorization error. Analyse of 5xx erros helps with debugging problems with backend configuration, avability, and performance. Latency measure the API response speed, while integration latency highlights a problems with backend-level delays. 
+<img src="img/architecture-entry-point.png" alt="">
+
+### Simpified pay-in flow steps
+
+1. **Step 1**: Payment request.  
+A customer submits a payment request via the API Gateway e.g., clicks `Place Order`.  
+**Result**: A payment event is generated with all required data  
 
 
-# Tools
-## OpenTelemetry 
-open-source tool for collecting, and processing data such as traces, metrics and logs. Serverless requests flow throught multiple serveices. The key benefit of OpenTelemetry is insight into such flow. More info you will find below.
+2. **Step 2**: Payment initialisation.  
+The **Payment Initializer**:  
+	- validates the request, 
+	- stores payment metadata in DynamoDB (`ShowMeTheMoney` table),  
+	-  publishes an `PaymentInitiatedEvent` event to EventBridge including key attributes e.g. `payment_order_id`, `amount`, `currency`  
 
-## Dynatrace 
-For enterprise-grade observability, we integrate the setup with Dynatrace, a comprehensive monitoring platform. Dynatrace provides powerful AI-driven insights, anomaly detection, and dashboards tailored for API performance. It complements OpenTelemetry by adding deep analytics and actionable intelligence to the collected data.
+| **Atribute**       | **Type**   | **Description**                                  |
+| ------------------ | ---------- | ------------------------------------------------ |
+| `payment_order_id` | `string`   | A global unique for the payment                  |
+| `buyer_info`       | `string`   | Information about a buyer                        |
+| `payment_details`  | `string`   | Encrypted payment information                    |
+| `amount`           | `string`   | Transaction amout                                |
+| `currency`         | `string`   | Transaction currency                             |
+| `status`           | `string`   | Transaction status (`INITIATED`, `FAILED`, etc.) |
+| `timestamp`        | `datetime` | Timestamp of payment inicialization              |
+Table 1: Payment metadata - DynamoDB ShowMeTheMoney table
 
-# Summary
-By leveraging observability, teams gain actionable insights into patterns, error rates, traffic flows, and backend integration performance. This data-driven approach not only helps in identifying and resolving issues proactively but also empowers engineering teams to optimize  performance and deliver exceptional end-user experiences.
+3. **Step 3**: Payment process. 
+Once the **`PaymentInitiatedEvent`** is published, EventBridge routes it to multiple subscribers
 
+3.1 **Payment Finalizer**  
+- Receives the **`PaymentInitiatedEvent`** from EventBridge.
+- Processes the payment with a PSP (Payment Service Provider).
+- Updates DynamoDB table (**BreakingTheBank**) with the final status (`SUCCESS` or `FAILED`).
+- Publishes a **`PaymentStatusUpdatedEvent`** (containing `payment_order_id`, `payment_status`, and possibly `error_message`) to EventBridge.
+
+| **Atrybut**        | **Typ**    | **Opis**                              |
+| ------------------ | ---------- | ------------------------------------- |
+| `payment_order_id` | `string`   | A global unique for the payment       |
+| `amount`           | `string`   | Transaction amout                     |
+| `currency`         | `string`   | Transaction currency                  |
+| `payment_status`   | `string`   | Payment status (`SUCCESS`, `FAILED`). |
+| `error_message`    | `string`   | Error message                         |
+| `timestamp`        | `datetime` | Timestamp of payment registratrion    |
+Table 2: Payment status - DynamoDB BrakingTheBank table  
+
+3.2 **Ledger**
+- Subscribes to the **`PaymentStatusUpdatedEvent`**.
+- Updates the accounting records based on the final status of the payment.
+- Ensures full traceability of financial transactions.
+
+3.3 **Wallet**
+- Subscribes to the **`PaymentStatusUpdatedEvent`**.
+- Updates the merchant’s balance (if the payment is `SUCCESS`).
+- Reflects the new wallet state for the merchant.
+
+
+
+### **Summary of Event Names**
+
+1. **`PaymentInitiatedEvent`**
+    
+    - Published by: **Payment Initializer**
+    - Consumed by: **Payment Finalizer**
+    - Purpose: Informs subscribers that a new payment request is ready to be processed.
+2. **`PaymentStatusUpdatedEvent`**
+    
+    - Published by: **Payment Finalizer**
+    - Consumed by: **Ledger**, **Wallet**
+    - Purpose: Announces the final status of the payment (e.g., `SUCCESS`, `FAILED`), prompting accounting and wallet updates.
+
+# Overview of the key components
+
+### **1. API Gateway – The Entry Point**
+
+**Role:**
+
+- Handles all HTTP/HTTPS requests coming into the application.
+- Integrates with AWS Lambda to build scalable, event-driven workflows.
+
+**Key observability and troubleshooting points:**
+
+- **4xx errors** typically indicate client-side issues (e.g., invalid request parameters or authorization failures).
+- **5xx errors** suggest backend or configuration problems, often related to service availability or performance bottlenecks.
+- **Latency** measures overall response speed of the API.
+- **Integration latency** highlights delays or performance issues specifically at the backend level (e.g., Lambda function execution times).
+
+Together, these metrics and error codes provide a clear starting point for debugging and performance tuning.  
+
+### **2. AWS Lambda – Serverless Compute**
+
+AWS Lambda runs code in response to events without the need to manage servers. It scales automatically based on the number of incoming events such as HTTP requests, changes data in S3 bucket, DynamoDB tables or scheduled tasks.  
+
+**Role:**
+- Executes business logic on demand. 
+
+**Key metrics include:**
+
+- **Failure rate** measures failed execution over total invocations
+- **Execution duration** shows how long each function run takes, which is critical for optimising performance and costs 
+- **Concurrent execution count** - indicates how many Lambda functions are running in parallel 
+- **Number of invocations** - reflects overall usage 
+
+These metrics deliver insights into application performance and can guide optimizations.
+
+### **3. Amazon EventBridge – event-driven orchestration**
+
+**Role:**
+
+- Acts as the central hub for event routing and decoupling between microservices.
+
+**Key metrics:**
+- **PutEvents p99 latency** measures time it takes to accept and process event
+- **Successful invocation attempts** overall number of times EventBridge attempts to invoke the target, including retries
+
+### **4. Amazon DynamoDB – NoSQL database**
+
+**Role:**
+
+- Holds transaction and status details:
+
+**Key DynamoDB metrics:**
+
+- **Read/Write capacity (RCU/WCU):** ensures correct provisioning for throughput.
+- **Throttled Requests:** may indicate the need to increase capacity or optimize queries.
+- **Latency:** measures read/write performance. 
+- **Successfull Read/Write Requests**: reflects how many operations are completed without errors
+
+### 5. Kinesis Data Firehose - streaming data delivery
+
+**Role:**
+
+- Stream into data lakes and warehouses like Amazon S3, Amazon OpenSearch, Dynatrace
+- Often used to stream logs, metrics, or transactional data for analytics, auditing, or long-term storage
+
+<img src="./img/o11y-lab-firehose.png">
+
+### 6. Amazon CloudWatch 
+
+**Role:**
+
+- Central service for collecting metric, logs, and events across AWS resources
+
+### 7. Instrumentation
+
+What is instrumentation?
+**Instrumentation** refers to the process of embedding mechanisms in an application to **collect telemetry data** such as **traces, metrics, and logs**. Modern, distributed applications can be complex to debug, and frameworks like **OpenTelemetry** address this by standardising data collection across various services and languages.
+
+OpenTelemetry gives developers two main ways to instrument the application:
+- Code-based solution via APIs and SDKs for languages like `C++, C#/.NET, GO, Java, JavaScript, Python, Ruby, Rust` (all list of supported languages you will find on official website https://opentelemetry.io/docs/languages/)
+- Zero-code solutions which are the best way to get started with instrumentation your application or if you are not able to change a code. 
+
+> ✅ **IMPORTANT**:  
+ > you can use both solutions simultaneously
+
+## **OpenTelemetry and Dynatrace in AWS Lambda**
+
+To use **OpenTelemetry** in connection to **Dynatrace**, you can leverage **OneAgent**, a dedicated instrumentation agent. Dynatrace provides an AWS Lambda layer that contains OneAgent, making it straightforward to collect telemetry data (logs, metrics, and traces) and send it to Dynatrace.
+
+### How does it works?
+
+- When your Lambda function is called for the first time, the Lambda layer spins up an instance of the OpenTelemetry Collector.  
+- The Collector registers itself with the **Lambda Extensions API** and **Telemetry API**, allowing it to receive notifications whenever your function is invoked, when logs are emitted, or when the execution context is about to be shut down.  
+- The Collector uses a specialized **decouple processor**, which separates data collection from data export. This means your Lambda function can **return immediately**, without waiting for telemetry to be sent.
+- If the Collector has not finished sending all telemetry before the function returns, it will **resume exporting**during the next invocation or just before the Lambda context is fully terminated. This significantly reduces any added latency to your function runtime. It also not increasing a costs. 
+    
+
+### Configuration Options
+
+You can configure and deploy this setup using a variety of methods:
+
+- **JSON files**
+- **Environment variables**
+- **Terraform**
+- **AWS SAM**
+- **Serverless Framework**
+- **AWS CloudFormation**
+
+### Benefits for Serverless Environments
+
+By adopting this architecture:
+
+- You gain **comprehensive telemetry** (logs, metrics, traces) with minimal code changes and operational overhead.
+- **Performance insights** and **faster troubleshooting** become possible, thanks to rich observability data.
+- Lambda’s execution time and costs are only minimally impacted, due to the asynchronous nature of telemetry export.
+
+In short, **OpenTelemetry** combined with **Dynatrace OneAgent** provides an efficient, non-blocking way to gather and analyze crucial information about your serverless applications in AWS Lambda.
+
+<img src="./img/o11y-lab-otel.png">
 
 # Let’s kickstart this adventure - setting up the environment
 
-In the following sections, we’ll walk through setting up this environment, configuring key observability metrics, and analyzing the data to optimize your API Gateway performance. By the end, you'll have a practical roadmap for implementing observability in your own infrastructure.
+In the following sections, we’ll walk through setting up this environment, configuring key observability metrics, and analyzing the data. By the end, you'll have a practical roadmap for implementing observability in your own infrastructure.
 
-### Prerequisites
+## Prerequisites
 
 Before diving into the creation of an AWS Lambda Function, ensure you have the following:
 
 - [ ] **AWS Account**: If you don’t have one, create it at [AWS Signup](https://signin.aws.amazon.com/signup?request_type=register).
 - [ ] **IAM Permissions**: Ensure your AWS user has the necessary permissions to create and manage Lambda functions and API Gateway resources.
 
-#### Sign in to AWS Management Console
+## Sign in to AWS Management Console
 Access the [AWS Management Console](https://aws.amazon.com/console/) and log in to your account.
 
-### Elastic Container Registry (ECR)
+## Lambda Function with zip stored on S3 bucket
 
-To use a Docker image-based Lambda function, we first need to create an **Elastic Container Registry (ECR)** to store the Docker image containing the Lambda code.
+### Prerequistis:  
+S3 bucket created
+1. Open AWS Console and navigate to Amazon S3 bucket
+2. Click on `create bucket` on the top right window
+3. Enter the bucket name
+4. Ensure that `block all public access` is ticked
+5. Click on create bucket 
 
-1. Open **ECR** in the AWS Console.
-2. Click **Create registry** in the top-right corner.
-3. Under General settings:
-   - Set a unique name for the registry, e.g., `traffiq`.
-4. Click **Create** to finalize the setup.
-
-### Lambda Function with Docker
-
-Let’s create a simple Python-based Lambda function that returns `"Hello Observability!"`.
-
-##### Step 1: Create `lambda_function.py`
-
-```python
-def handler(event, context):
-    return {"statusCode": 200, "body": "Hello Observability!"}
-```
-
-##### Step 2: Create a `Dockerfile`
-
-```dockerfile
-FROM public.ecr.aws/lambda/python:3.12-x86_64
-
-COPY lambda_function.py ${LAMBDA_TASK_ROOT}
-
-CMD ["lambda_function.handler"]
-```
-
-##### Step 3: Build and Push the Docker Image
-
-- **Authenticate Docker Client to ECR**
-
-Retrieve an authentication token and authenticate your Docker client to the registry using the AWS CLI:
-
-```bash
-aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-```
-
-- **Build the Docker Image**
-
-Build the Docker image for the `linux/amd64` platform:
-
-```bash
-docker build --platform linux/amd64 -t traffiq:latest .
-```
-
-- **Tag the Docker Image**
-
-After the build is complete, tag the image for your ECR repository:
-
-```bash
-docker tag traffiq:latest $(AWS_ACCOUNT_ID).dkr.ecr.eu-west-1.amazonaws.com/traffiq:latest
-```
-
-- **Push the Image to ECR**
-
-Push the image to your newly created ECR repository:
-
-```bash
-docker push $(AWS_ACCOUNT_ID).dkr.ecr.eu-west-1.amazonaws.com/traffiq:latest
-```
-
-### Lambda Function with zip
-
-First step is basicly the same like with Docker option: 
-
-##### Step 1: Create `lambda_function.py`
-
-```python
-def handler(event, context):
-    return {"statusCode": 200, "body": "Hello Observability!"}
-```
-
-##### Step 2: 
-
-TODO 
-
+<img src="img/s3bucket-create.png">
 
 ### Lambda Function
+
+##### Step 1: Create source code `lambda.py`
+
+```python
+def handler(event, context):
+    return {"statusCode": 200, "body": "Show me the money!!"}
+```
+
+##### Step 2: Create AWS Lambda
 
 To create a Lambda function with a container image:
 
 1. Open **Lambda** in the AWS Console.
 2. Click on **Create Function** in the top-right corner.
-3. Choose **Container Image** and fill in the following under **Basic Information**:
-   - **Function Name**: `traffiq`
-   - **Container Image URI**: `$(AWS_ACCOUNT_ID).dkr.ecr.eu-west-1.amazonaws.com/traffiq:latest`
+3. Choose **Author from scratch** and fill in the following under **Basic Information**:
+   - **Function name**: `o11y-lab-lambda-payments-initializer`
+   - **Runtime**: `python3.13`
 4. Click **Create Function** to complete the setup.
+
+##### Step 3: Install Dependencies (if needed)
+
+If your Lambda function requires additional libraries, install them in the same directory as lambda.py. For example: 
+
+```bash
+mkdir -p package_directory
+pip install --target package_directory -r requirements.txt
+```
+
+##### Step 4: Package the code
+
+Create a ZIP file containing your Lambda function and dependencies. Run the following command in the directory where lambda_function.py is located:
+	
+```bash
+cd package_directory && zip -r ../deployment_package .
+zip deployment_package.zip lambda.py
+```
+
+##### Step 5: Upload the ZIP to S3 bucket 
+- CLI:
+```bash
+aws s3 cp deployment_package.zip s3://o11y-lab-s3-bucket/deployment_package.zip
+```
+
+- you can also upload a file to Amazon S3 using UI:
+<img src="img/s3bucket-upload.png">
+
+- and then choose a right package in S3 bucket:
+<img src="img/lambda-upload.png">
+ 
 
 
 ### API Gateway
@@ -149,7 +296,7 @@ To create a Lambda function with a container image:
 2. Click **Create API** and select the **REST API** option.
 3. Under **API Details**:
    - Choose **New API**.
-   - Set a unique **API Name**, e.g., `traffiq-api`.
+   - Set a unique **API Name**, e.g., `o11y-lab-lambda-payments-initializer-api`.
 
 
 #### Step 2: Create Methods
@@ -174,6 +321,7 @@ To create a Lambda function with a container image:
 3. Click **Deploy** to finalize the process.
 4. Retrieve the **Invoke URL** for your deployed API from the **Stage Details**.
 
+<img src="img/apigateway-main-view.png">
 
 #### Step 4: Enable Logs and Tracing
 
@@ -188,14 +336,14 @@ To ensure that everythings work correctly, run
 ```
 curl -X GET "https://{APIGATEWAY_UNIQUE_ID}.execute-api.eu-west-1.amazonaws.com/{STAGE}"
 ```
-it should return `Hello Observability!`
+it should return `Show me the money!!`
 
 you can use also Postman, if you prefer a UI environment to work with https://www.postman.com/
 
 
 ### Ingesting AWS Logs into Dynatrace via Amazon Kinesis Data Firehose
 
-Integrating Dynatrace with Amazon Kinesis Data Firehose allows for seamless and secure log ingestion from AWS services. To enable log forwarding, you’ll need to set up a Firehose delivery stream and configure it to send logs to your Dynatrace environment. CloudWatch log groups can be linked through subscription filters, or logs can be sent directly from other supported services like Amazon MSK (Managed Streaming for Apache Kafka).
+This tutorial covers multiple approaches for delivering logs to Dynatrace, with a focus on OpenTelemetry and Amazon Kinesis Data Firehose. Firehose enables secure, real-time log ingestion from AWS services into Dynatrace. The setup process involves configuring a Firehose delivery stream and establishing a subscription filter to link CloudWatch log groups, ensuring efficient log forwarding.
 
 #### Step 1: Configure an Amazon Kinesis Data Firehose Stream
 
@@ -216,8 +364,7 @@ Integrating Dynatrace with Amazon Kinesis Data Firehose allows for seamless and 
    - **Backup Settings**: Enable **Failed data only** and create a backup S3 bucket.
 5. **Finalize Stream Creation**: Review your settings and click **Create Delivery Stream**.
 
-case is a bit diffrent if you would like to use Terraform. There is no avaiable nativly supported destination, so you have to
-choose **http_endpoint** insted of, which brings one more difference - you have to provide URL with api
+The case is slightly different when using Terraform. Since there is no natively supported destination, you need to choose **http_endpoint** instead. This introduces an additional requirement—you must specify a URL with an API endpoint.
 
 ```terraform
 resource "aws_kinesis_firehose_delivery_stream" "this" {
@@ -258,7 +405,7 @@ resource "aws_kinesis_firehose_delivery_stream" "this" {
   }
 
   tags = {
-    Name        = "traffiq-terraform-kinesis-firehose-dynatrace-stream"
+    Name        = "o11y-lab-terraform-kinesis-firehose-dynatrace-stream"
   }
 }
 ```
@@ -320,35 +467,28 @@ A delivery stream requires an IAM role with a trust relationship to CloudWatch. 
    - **Filter Name**: Provide a descriptive name for the subscription.
 5. Click **Start Streaming** to activate log forwarding.
 
-### Instrumentation
+### OpenTelemetry Dynatrace OneAgent Lambda Layer 
 
-What is instrumentation?
-Instrumentation is a process of equipping an application code with mechanizm that enable the collection and emission of telemetry data such as traces, metrics and logs.The complexity of modern applications clearly brings many challenges with debugging and performance evaluation, and OpenTelemetry addresses all these issues.
+#### Step 1: Add layer to Lambda function
+1. Open **Lambda** in the AWS Console.
+2. Scroll down in `Code` section and
+3. Click on `Add a layer`
+   <img src="img/lambda-layers.png"/>
+4. Choose `Specify an ARN` and fill it with necessary ARN e.g. `arn:aws:lambda:eu-west-1:725887861453:layer:Dynatrace_OneAgent_1_303_2_20241004-043401_with_collector_python:1`
+   <img src="img/lambda-add-layer.png"/>
+6. Click `Add` to finalize a process
 
-One of the most recognising instrumentation open source tool is `OpenTelemetry`. OpenTelemetry gives developers two main ways to instrument the application:
-- Code-based solution via APIs and SDKs for languages like `C++, C#/.NET, GO, Java, JavaScript, Python, Ruby, Rust` (all list of supported languages you will find on official website https://opentelemetry.io/docs/languages/)
-- Zero-code solutions which are the best way to get started with instrumentation your application or if you are not able to change a code. 
+then environments variables needs to be setup. Navigate to `Configuration` section of your Lambda settings and fill all necessary values.
+<img src="img/lambda-env-vars.png"/>
 
-# Important:
-you can use both solutions simultaneously
+# Terraform
 
-I would like to focus mostly, how you can benefit OpenTelemetry with Dynatrace. Dynatrace offers possibility to use OneAgent to instrument your application. Tool provides dedicated AWS Lambda layer that contains OneAgent.
-
-Given configuration method
-- JSON file 
-- Environments variables
-- Terraform
-- AWS SAM
-- Serverless framework
-- AWS CloudFormation
-
-# Why terraform?
-IaC (Infrastructure as Code) become a GitOps standard about how to manage and provision configuration of the infrastructure. Terraform is another open source tool which allows users to define a state of the infrastucture in code. 
+Alternatively, you can use Terraform to automate all the necessary steps described above. Since this is not a Terraform course, I will provide only a brief example to illustrate the process. However, you can find a complete implementation in the repository.
 
 Bellow example show how Dynatrace AWS Layer
 ` layers = var.lambda_layers_arns` is added to the AWS Lambda. 
 
-# Terraform configuration
+## Lambda layer configuration
 
 Lambda definition
 ```terraform
@@ -399,17 +539,7 @@ lambda_layers_arns = [
 ]
 ```
 
-Obviously alternative way how to archive the same is to setup lambda manually, by:
-1. Open **Lambda** in the AWS Console.
-2. Scroll down in `Code` section and
-3. Click on `Add a layer`
-   <img src="img/lambda-layers.png"/>
-4. Choose `Specify an ARN` and fill it with necessary ARN e.g. `arn:aws:lambda:eu-west-1:725887861453:layer:Dynatrace_OneAgent_1_303_2_20241004-043401_with_collector_python:1`
-   <img src="img/lambda-add-layer.png"/>
-6. Click `Add` to finalize a process
 
-then environments variables needs to be setup. Navigate to `Configuration` section of your Lambda settings and fill all necessary values.
-<img src="img/lambda-env-vars.png"/>
 
 # How to retrive all necessary values?
 Dynatrace offers quite good support for onboarding users. To retrive all necessary configuration you have to:
@@ -427,3 +557,91 @@ From that point you can easly navigate to `Distributed tracing` application
 <img src="img/lambda-dist-traces-lambda-view.png">
 
 <img src="img/lambda-dist-traces-lambda-view-all-good.png">
+
+
+
+
+
+
+=====
+to be used:
+
+# Tools
+## OpenTelemetry 
+open-source tool for collecting, and processing data such as traces, metrics and logs. Serverless requests flow throught multiple serveices. The key benefit of OpenTelemetry is insight into such flow. More info you will find below.
+
+## Dynatrace 
+For enterprise-grade observability, we integrate the setup with Dynatrace, a comprehensive monitoring platform. Dynatrace provides powerful AI-driven insights, anomaly detection, and dashboards tailored for API performance. It complements OpenTelemetry by adding deep analytics and actionable intelligence to the collected data.
+
+# Summary
+By leveraging observability, teams gain actionable insights into patterns, error rates, traffic flows, and backend integration performance. This data-driven approach not only helps in identifying and resolving issues proactively but also empowers engineering teams to optimize  performance and deliver exceptional end-user experiences.
+
+
+
+Elastic Container Registry (ECR)
+
+To use a Docker image-based Lambda function, we first need to create an **Elastic Container Registry (ECR)** to store the Docker image containing the Lambda code.
+
+1. Open **ECR** in the AWS Console.
+2. Click **Create registry** in the top-right corner.
+3. Under General settings:
+   - Set a unique name for the registry, e.g., `o11y-lab`.
+4. Click **Create** to finalize the setup.
+
+
+
+
+### Lambda Function with Docker
+
+Let’s create a simple Python-based Lambda function that returns `"Show me the money!!"`.
+
+##### Step 1: Create `lambda.py`
+
+```python
+def handler(event, context):
+    return {"statusCode": 200, "body": "Show me the money!!"}
+```
+
+##### Step 2: Create a `Dockerfile`
+
+```dockerfile
+FROM public.ecr.aws/lambda/python:3.12-x86_64
+
+COPY lambda.py ${LAMBDA_TASK_ROOT}
+
+CMD ["lambda_function.handler"]
+```
+
+##### Step 3: Build and Push the Docker Image
+
+- **Authenticate Docker Client to ECR**
+
+Retrieve an authentication token and authenticate your Docker client to the registry using the AWS CLI:
+
+```bash
+aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+```
+
+- **Build the Docker Image**
+
+Build the Docker image for the `linux/amd64` platform:
+
+```bash
+docker build --platform linux/amd64 -t o11y-lab-lambda-payments-initializer:latest .
+```
+
+- **Tag the Docker Image**
+
+After the build is complete, tag the image for your ECR repository:
+
+```bash
+docker tag o11y-lab-lambda-payments-initializer:latest $(AWS_ACCOUNT_ID).dkr.ecr.eu-west-1.amazonaws.com/o11y-lab-lambda-payments-initializer:latest
+```
+
+- **Push the Image to ECR**
+
+Push the image to your newly created ECR repository:
+
+```bash
+docker push $(AWS_ACCOUNT_ID).dkr.ecr.eu-west-1.amazonaws.com/o11y-lab-lambda-payments-initializer:latest
+```

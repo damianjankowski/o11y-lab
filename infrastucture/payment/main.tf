@@ -43,15 +43,26 @@ module "api_gateway_initializer" {
 
 }
 
-module "firehose_initializer" {
+module "firehose_initializer_api_gateway" {
   source = "../modules/terraform-aws-firehose"
 
-  firehose_name = "${local.project_name}-initializer"
+  firehose_name = "${local.project_name}-apigateway-initializer"
 
   dynatrace_api_url        = var.dynatrace_api_url
   dynatrace_access_key     = var.dynatrace_access_key
   s3_bucket_arn            = data.terraform_remote_state.master_main.outputs.s3_bucket_arn
   aws_cloudwatch_log_group = module.api_gateway_initializer.aws_cloudwatch_log_group
+}
+
+module "firehose_initializer_lambda" {
+  source = "../modules/terraform-aws-firehose"
+
+  firehose_name = "${local.project_name}-lambda-initializer"
+
+  dynatrace_api_url        = var.dynatrace_api_url
+  dynatrace_access_key     = var.dynatrace_access_key
+  s3_bucket_arn            = data.terraform_remote_state.master_main.outputs.s3_bucket_arn
+  aws_cloudwatch_log_group = module.lambda_initializer.aws_cloudwatch_log_group
 }
 
 module "dynamodb_table_show_me_the_money" {
@@ -99,15 +110,26 @@ module "api_gateway_finalizer" {
 
 }
 
-module "firehose_finalizer" {
+module "firehose_finalizer_api_gateway" {
   source = "../modules/terraform-aws-firehose"
 
-  firehose_name = "${local.project_name}-finalizer"
+  firehose_name = "${local.project_name}-apigateway-finalizer"
 
   dynatrace_api_url        = var.dynatrace_api_url
   dynatrace_access_key     = var.dynatrace_access_key
   s3_bucket_arn            = data.terraform_remote_state.master_main.outputs.s3_bucket_arn
   aws_cloudwatch_log_group = module.api_gateway_finalizer.aws_cloudwatch_log_group
+}
+
+module "firehose_finalizer_lambda" {
+  source = "../modules/terraform-aws-firehose"
+
+  firehose_name = "${local.project_name}-lambda-finalizer"
+
+  dynatrace_api_url        = var.dynatrace_api_url
+  dynatrace_access_key     = var.dynatrace_access_key
+  s3_bucket_arn            = data.terraform_remote_state.master_main.outputs.s3_bucket_arn
+  aws_cloudwatch_log_group = module.lambda_finalizer.aws_cloudwatch_log_group
 }
 
 module "dynamodb_table_breaking_the_bank" {

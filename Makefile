@@ -114,11 +114,6 @@ deploy-pay-fin:  ## Deploy Payment app - fin
 	cd src/lambda-payments-finalizer/ && make deploy-s3-using-docker
 
 
-# Apps
-##@ Apps
-
-
-
 # TODO
 ## Nuke them All
 ###@ NUke them all
