@@ -6,11 +6,13 @@ import datetime
 import random
 from loguru import logger
 
+
 class Config():
     marker = "o11y-lab"
     initializer_table_name = "ShowMeTheMoney"
     finalizer_table_name = "BreakingTheBank"
     time_to_distroy = 2 * 60 * 60
+
 
 # Configure loguru
 logger.remove()
@@ -20,6 +22,7 @@ logger.add(
     level="INFO",
     format="{time} - o11y-lab - {level} - {message}",
 )
+
 
 def handler(event, context):
     config = Config()
@@ -35,8 +38,20 @@ def handler(event, context):
                 logger.error("Missing payment_id in event detail")
                 return {"statusCode": 400, "body": json.dumps({"message": "Bad Request"})}
 
-            final_status = random.choice(["Success", "Failure"])  # simulate payment authorization
+            # Simulate configuration
+            simulate_fin = detail.get("simulate", {}).get("fin", {})
+            latency = simulate_fin.get("latency", 0)
+            if latency > 0:
+                logger.info(f"Simulating finalization latency for {latency} seconds")
+                time.sleep(latency)
 
+            # Simulate DB error
+            if simulate_fin.get("db_error", False):
+                logger.error("Simulated DB error (finalizer) triggered")
+                raise Exception("Simulated DB error (finalizer)")
+
+            # Simulate payment authorization
+            final_status = random.choice(["Success", "Failure"])
             ttl_timestamp = int(time.time()) + config.time_to_distroy
 
             table = dynamodb.Table(config.finalizer_table_name)
@@ -50,10 +65,15 @@ def handler(event, context):
                 },
                 ExpressionAttributeValues={
                     ":status": final_status,
-                    ":timestamp": str(datetime.datetime.now(datetime.UTC)),
+                    ":timestamp": str(datetime.datetime.now(datetime.timezone.utc)),
                     ":ttl": ttl_timestamp
                 },
             )
+
+            # Simulate 500 error
+            if simulate_fin.get("error_500", False):
+                logger.error("Simulated 500 error (finalizer) triggered")
+                raise Exception("Simulated 500 error (finalizer)")
 
             logger.info(
                 "Payment %s updated with status %s and TTL %d",
