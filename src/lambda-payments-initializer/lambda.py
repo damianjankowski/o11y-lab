@@ -87,7 +87,7 @@ def handler(event, context):
 
                 # Simulate 400 error in validation
                 if simulate_error_400_init:
-                    raise ValueError("Simulated 400 error (init) for testing purposes.")
+                    raise ValueError("Simulated 400 error (init)")
 
                 # Simulate processing latency 
                 if simulate_latency_init > 0:
@@ -134,7 +134,7 @@ def handler(event, context):
 
             # Simulate 500 error  before sending event
             if simulate_error_500_init:
-                raise Exception("Simulated 500 error (init) before sending event to EventBridge for testing purposes.")
+                raise Exception("Simulated 500 error (init) before sending event to EventBridge")
 
             with tracer.start_as_current_span("eventbridge.publish") as event_span:
                 try:

@@ -23,6 +23,14 @@ logger.add(
     format="{time} - o11y-lab - {level} - {message}",
 )
 
+from datetime import datetime, timedelta, timezone
+
+def wait(duration):
+    end_time = datetime.now(timezone.utc) + duration
+    while datetime.now(timezone.utc) < end_time:
+        pass
+
+
 
 def handler(event, context):
     config = Config()
@@ -43,7 +51,8 @@ def handler(event, context):
             latency = simulate_fin.get("latency", 0)
             if latency > 0:
                 logger.info(f"Simulating finalization latency for {latency} seconds")
-                time.sleep(latency)
+                # time.sleep(latency)
+                wait(latency)
 
             # Simulate DB error
             if simulate_fin.get("db_error", False):
