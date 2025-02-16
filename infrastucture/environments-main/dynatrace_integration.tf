@@ -69,10 +69,10 @@ resource "null_resource" "install_activegate" {
 
     inline = [
       "sudo dnf install libxcrypt-compat -y",
-      "wget -O Dynatrace-ActiveGate-Linux-x86-1.305.57.sh \"${var.DYNATRACE_ENV_URL}\" --header=\"Authorization: Api-Token ${var.DYNATRACE_ACTIVEGATE_TOKEN}\"",
+      "wget -O Dynatrace-ActiveGate-Linux-x86-1.305.57.20250111-162425.sh \"${var.DYNATRACE_ENV_URL}\" --header=\"Authorization: Api-Token ${var.DYNATRACE_ACTIVEGATE_TOKEN}\"",
       "wget https://ca.dynatrace.com/dt-root.cert.pem",
-      "( echo 'Content-Type: multipart/signed; protocol=\"application/x-pkcs7-signature\"; micalg=\"sha-256\"; boundary=\"--SIGNED-INSTALLER\"'; echo ; echo ; echo '----SIGNED-INSTALLER' ; cat Dynatrace-ActiveGate-Linux-x86-1.305.57.sh ) | openssl cms -verify -CAfile dt-root.cert.pem > /dev/null",
-      "sudo /bin/bash Dynatrace-ActiveGate-Linux-x86-1.305.57.sh",
+      "( echo 'Content-Type: multipart/signed; protocol=\"application/x-pkcs7-signature\"; micalg=\"sha-256\"; boundary=\"--SIGNED-INSTALLER\"'; echo ; echo ; echo '----SIGNED-INSTALLER' ; cat Dynatrace-ActiveGate-Linux-x86-1.305.57.20250111-162425.sh ) | openssl cms -verify -CAfile dt-root.cert.pem > /dev/null",
+      "sudo /bin/bash Dynatrace-ActiveGate-Linux-x86-1.305.57.20250111-162425.sh",
     ]
   }
 

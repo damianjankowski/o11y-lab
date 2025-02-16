@@ -40,7 +40,8 @@
             "state": {
               "type": "file-explorer",
               "state": {
-                "sortOrder": "alphabetical"
+                "sortOrder": "alphabetical",
+                "autoReveal": false
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -164,6 +165,19 @@
   },
   "active": "af9e03ec8d0cd6fa",
   "lastOpenFiles": [
+    "src/lambda-payments-initializer/test_perf/__pycache__/locustfile.cpython-313.pyc",
+    "src/lambda-payments-initializer/test_perf/__pycache__",
+    "src/lambda-payments-finalizer/zitqEBd2",
+    "src/lambda-payments-finalizer/o11y-lab-lambda-payments-finalizer.zip",
+    "src/lambda-payments-finalizer/ziAyb2uF",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/top_level.txt",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/WHEEL",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/RECORD",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/METADATA",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/LICENSE",
+    "src/lambda-payments-finalizer/package/zipp-3.15.0.dist-info/INSTALLER",
+    "src/lambda-payments-finalizer/package/opentelemetry/sdk/metrics/_internal/exponential_histogram/mapping/ieee_754.md",
+    "src/lambda-payments-initializer/package/opentelemetry/sdk/metrics/_internal/exponential_histogram/mapping/ieee_754.md",
     "img/o11y-lab-firehose.png",
     "img/o11y-lab-entry-point.png",
     "img/o11y-lab-otel.png",
@@ -174,18 +188,6 @@
     "README.md",
     "Pasted image 20250126123914.png",
     "img/main.png",
-    "img/apigateway-main-view.png",
-    "img/lambda-create.png",
-    "src/lambda-payments-initializer/o11y-lab-lambda-payments-initializer.zip",
-    "src/lambda-payments-initializer/ziQQeKib",
-    "src/lambda-payments-initializer/package/bin/opentelemetry-instrument",
-    "src/lambda-payments-initializer/package/bin/opentelemetry-bootstrap",
-    "src/lambda-payments-initializer/package/bin/faker",
-    "src/lambda-payments-initializer/package/bin",
-    "src/lambda-payments-initializer/package/deprecated/__pycache__/sphinx.cpython-313.pyc",
-    "src/lambda-payments-initializer/package/deprecated/__pycache__/classic.cpython-313.pyc",
-    "src/lambda-payments-initializer/package/deprecated/__pycache__/__init__.cpython-313.pyc",
-    "src/lambda-payments-initializer/package/deprecated/classic.py",
-    "src/lambda-payments-initializer/package/opentelemetry/sdk/metrics/_internal/exponential_histogram/mapping/ieee_754.md"
+    "img/apigateway-main-view.png"
   ]
 }

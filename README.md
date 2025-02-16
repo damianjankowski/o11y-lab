@@ -1,5 +1,6 @@
-# [DRAFT] Serverless Unified Observability Done Right: I wrote a Tutorial so you Don’t Have To!
+# [DRAFT] Serverless Unified Observability Done Right: I wrote a Tutorial so you Don't Have To!
 
+Hi, I am Damian Jankowski currently working as a Site Reliability and Platform Engineering at Kitopi in Cracow, Poland. I hope this tutorial will help you get a better understanding about serverless observability. Let's start with why I tihnk this is important!
 
 # Intro
 
@@ -8,11 +9,15 @@ Observability is a foundational practise that helps answer critical questions ab
 - **Is it responding correctly?**
 - **Is it performing fast enough?**
 - **Is it cost efficient?**
+
 In a cloud-native world, where serverless architecture are gaining popularity, these questions become even more crucial. Without proper design and observability, the advantages of serverless can quickly become pitfalls, resulting in increased costs, degraded performance, security vulnerabilities, and complex debugging scenarios.
 
-Like many others, I typically rely on cloud-native reference architectures for building my serverless applications. However, when it comes to observability, I’ve felt that there is not good enough documentation or best practices for instrumenting serverless with OpenTelemetry and connecting those traces to metrics and logs that can be pulled or streamed from the cloud vendor.
+Like many others, I typically rely on cloud-native reference architectures for building my serverless applications. However, when it comes to observability, I've felt that there is not good enough documentation or best practices for instrumenting serverless with OpenTelemetry and connecting those traces to metrics and logs that can be pulled or streamed from the cloud vendor.
 
-In this article, I’ll share my **Unified Observability for AWS Serverless Stack GitLab Tutorial**, which showcasesall the lessons learned, from setting up the stack (**API Gateway, Lambda, Firehose, etc.**) using **Terraform**, to instrumenting the code with **OpenTelemetry**, and finally to consolidating all observability signals into a single **Dynatrace** platform. 
+In this article, I'll share my **Unified Observability for AWS Serverless Stack GitLab Tutorial**, which showcases all the lessons learned, from setting up the stack (**API Gateway, Lambda, Firehose, etc.**) using **Terraform**, to instrumenting the code with **OpenTelemetry**, and finally to consolidating all observability signals into a single **Dynatrace** platform. 
+
+#TODO 
+#add dashboard screenshot
 
 <img src="img/main.png" alt="">
 
@@ -558,8 +563,7 @@ From that point you can easly navigate to `Distributed tracing` application
 
 <img src="img/lambda-dist-traces-lambda-view-all-good.png">
 
-
-
+# What 
 
 
 

@@ -12,11 +12,16 @@ data "aws_iam_policy_document" "active_gate_role_assume_role_policy_document" {
 }
 
 resource "aws_iam_role" "active_gate_role" {
-  name                = var.active_gate_role_name
-  path                = "/"
-  assume_role_policy  = data.aws_iam_policy_document.active_gate_role_assume_role_policy_document.json
-  managed_policy_arns = [aws_iam_policy.dynatrace_assume_policy.arn]
+  name               = var.active_gate_role_name
+  path               = "/"
+  assume_role_policy = data.aws_iam_policy_document.active_gate_role_assume_role_policy_document.json
 }
+
+resource "aws_iam_role_policy_attachment" "active_gate_role_policy_attachment" {
+  role       = aws_iam_role.active_gate_role.name
+  policy_arn = aws_iam_policy.dynatrace_assume_policy.arn
+}
+
 
 data "aws_iam_policy_document" "dynatrace_assume_policy_document" {
   statement {

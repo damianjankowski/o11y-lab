@@ -3,7 +3,6 @@ import logging
 import os
 from uuid import uuid4
 from random import randint
-import time
 
 import dotenv
 from locust import HttpUser, between, task
@@ -11,7 +10,7 @@ from locust import HttpUser, between, task
 
 class Config:
     LATENCY_MIN: float = float(os.getenv("LATENCY_MIN", 0.1))
-    LATENCY_MAX: float = float(os.getenv("LATENCY_MAX", 5.5))
+    LATENCY_MAX: float = float(os.getenv("LATENCY_MAX", 2 * 60))
 
 
 # Load environment variables
@@ -35,7 +34,6 @@ class SimulatedUser(HttpUser):
         headers = {
             "Content-Type": "application/json",
         }
-        time.sleep(5 * 60)
         self._send_request("POST", "/", json=payment, headers=headers)
 
     def _send_request(self, method, path, **kwargs):
